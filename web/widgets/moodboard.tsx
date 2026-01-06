@@ -232,7 +232,7 @@ function MoodboardApp({
   }
 
   return (
-    <div ref={containerRef} className="threejs-container">
+    <div ref={containerRef} className="threejs-container" style={{ position: 'relative' }}>
       {emotion && (
         <div
           style={{
@@ -261,7 +261,26 @@ function MoodboardApp({
           background: '#1a1a2e',
         }}
       />
-      {error && <div className="error-overlay">Error: {error}</div>}
+      {error && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 12,
+            right: 12,
+            zIndex: 20,
+            background: 'rgba(220, 38, 38, 0.9)',
+            padding: '12px 16px',
+            borderRadius: 8,
+            color: '#fff',
+            fontFamily: 'system-ui',
+            fontSize: 13,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          <strong>Error:</strong> {error}
+        </div>
+      )}
     </div>
   );
 }

@@ -71,17 +71,27 @@ Remember:
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      max_tokens: 4096, // Prevent truncation
     },
     options
   );
 
   // Extract the response text
-  const code = typeof response === "object" && "response" in response
+  const rawCode = typeof response === "object" && "response" in response
     ? (response as { response: string }).response
     : String(response);
 
   // Clean up the response - remove markdown code blocks if present
-  return cleanupCode(code);
+  const code = cleanupCode(rawCode);
+
+  // Validate the code is complete (not truncated)
+  if (!isCodeComplete(code)) {
+    throw new Error(
+      "AI generated incomplete code (truncated output). Please try again."
+    );
+  }
+
+  return code;
 }
 
 /**
@@ -104,6 +114,48 @@ function cleanupCode(code: string): string {
   }
 
   return cleaned.trim();
+}
+
+/**
+ * Validates that the generated code appears complete
+ * Returns true if code looks complete, false if truncated
+ */
+function isCodeComplete(code: string): boolean {
+  const trimmed = code.trim();
+
+  // Check for common truncation patterns (ends mid-statement)
+  const truncationPatterns = [
+    /:\s*$/,           // Ends with colon (incomplete property)
+    /,\s*$/,           // Ends with comma (incomplete list)
+    /\(\s*$/,          // Ends with open paren
+    /{\s*$/,           // Ends with open brace
+    /\[\s*$/,          // Ends with open bracket
+    /=\s*$/,           // Ends with equals (incomplete assignment)
+    /\+\s*$/,          // Ends with operator
+    /-\s*$/,
+    /\*\s*$/,
+    /\/\s*$/,
+  ];
+
+  for (const pattern of truncationPatterns) {
+    if (pattern.test(trimmed)) {
+      return false;
+    }
+  }
+
+  // Check for balanced braces (simple check)
+  const openBraces = (trimmed.match(/{/g) || []).length;
+  const closeBraces = (trimmed.match(/}/g) || []).length;
+  if (openBraces > closeBraces + 1) {
+    return false; // Significantly unbalanced
+  }
+
+  // Must have animate() call for a valid Three.js scene
+  if (!trimmed.includes("animate()") && !trimmed.includes("requestAnimationFrame")) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
