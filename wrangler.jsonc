@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
 
   "build": {
-    "command": "npm install && npm run build:widgets && npx tsc --noEmit"
+    "command": "npm install && INPUT=widgets/moodboard.html node node_modules/vite/bin/vite.js build && node node_modules/typescript/lib/tsc.js --noEmit"
   },
 
   "assets": {
@@ -67,7 +67,7 @@
     }
   ],
 
-  "workers_dev": false,
+  "workers_dev": true,
 
   "observability": {
     "enabled": true
