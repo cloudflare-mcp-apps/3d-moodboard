@@ -123,6 +123,10 @@ async function executeThreeCode(
   width: number,
   height: number
 ): Promise<void> {
+  // Critical: Set canvas buffer dimensions (not just CSS size)
+  canvas.width = width;
+  canvas.height = height;
+
   const fn = new Function(
     'ctx',
     'canvas',
@@ -202,32 +206,71 @@ function LoadingShimmer({ height, code, emotion }: { height: number; code?: stri
 // Main Moodboard App Component
 // ============================================================================
 
+// Helper to extract structured content from tool result
+function extractStructuredContent(result: CallToolResult | null): MoodboardToolInput | null {
+  if (!result) return null;
+
+  // Prefer structuredContent if available
+  if ('structuredContent' in result && result.structuredContent) {
+    return result.structuredContent as MoodboardToolInput;
+  }
+
+  // Fallback: parse from text content
+  const textContent = result.content
+    ?.filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+    .map((c) => c.text)
+    .join('');
+
+  if (textContent) {
+    try {
+      return JSON.parse(textContent) as MoodboardToolInput;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function MoodboardApp({
   toolInputs,
   toolInputsPartial,
+  toolResult,
 }: WidgetProps) {
   const [error, setError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const height = toolInputs?.height ?? toolInputsPartial?.height ?? DEFAULT_HEIGHT;
-  const code = toolInputs?.code || DEFAULT_THREEJS_CODE;
-  const emotion = toolInputs?.emotion ?? toolInputsPartial?.emotion;
+  // Extract code from tool RESULT (not input - we generate the code server-side)
+  const resultData = extractStructuredContent(toolResult);
+
+  const height = resultData?.height ?? toolInputs?.height ?? toolInputsPartial?.height ?? DEFAULT_HEIGHT;
+  const code = resultData?.code || DEFAULT_THREEJS_CODE;
+  const emotion = resultData?.emotion ?? toolInputs?.emotion ?? toolInputsPartial?.emotion;
   const partialCode = toolInputsPartial?.code;
-  const isStreaming = !toolInputs && !!toolInputsPartial;
+  const isStreaming = !toolResult && !!toolInputsPartial;
 
   useEffect(() => {
     if (!code || !canvasRef.current || !containerRef.current) return;
 
     setError(null);
-    const width = containerRef.current.offsetWidth || 800;
 
-    executeThreeCode(code, canvasRef.current, width, height).catch((e) =>
-      setError(e instanceof Error ? e.message : 'Unknown error')
-    );
+    // Use requestAnimationFrame to ensure layout is complete
+    const frameId = requestAnimationFrame(() => {
+      if (!canvasRef.current || !containerRef.current) return;
+
+      const width = containerRef.current.offsetWidth || 800;
+
+      executeThreeCode(code, canvasRef.current, width, height).catch((e) =>
+        setError(e instanceof Error ? e.message : 'Unknown error')
+      );
+    });
+
+    return () => cancelAnimationFrame(frameId);
   }, [code, height]);
 
-  if (isStreaming || !toolInputs) {
+  // Show loading until we have the result with generated code
+  if (isStreaming || !toolResult) {
     return <LoadingShimmer height={height} code={partialCode} emotion={emotion} />;
   }
 
