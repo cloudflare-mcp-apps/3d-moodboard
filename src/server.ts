@@ -7,17 +7,12 @@
 
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps";
 import * as z from "zod/v4";
-import {
-  registerAppTool,
-  registerAppResource,
-  RESOURCE_MIME_TYPE,
-  RESOURCE_URI_META_KEY,
-} from "@modelcontextprotocol/ext-apps/server";
 import type { Env, GenerateMoodSceneInput, LearnMoodPrimitivesInput } from "./types";
 import type { Props } from "./auth/props";
 import { loadHtml } from "./helpers/assets";
-import { UI_RESOURCES } from "./resources/ui-resources";
+import { UI_RESOURCES, UI_MIME_TYPE } from "./resources/ui-resources";
 import { SERVER_INSTRUCTIONS } from "./server-instructions";
 import { TOOL_METADATA, getToolDescription } from "./tools/descriptions";
 import { logger } from "./shared/logger";
@@ -57,14 +52,12 @@ export class Moodboard3DMCP extends McpAgent<Env, unknown, Props> {
     // ========================================================================
     // PART 1: Register UI Resource (Three.js Widget)
     // ========================================================================
-    registerAppResource(
-      this.server,
-      moodboardResource.uri,
+    this.server.registerResource(
+      moodboardResource.name,
       moodboardResource.uri,
       {
         description: moodboardResource.description,
-        mimeType: RESOURCE_MIME_TYPE,
-        _meta: { ui: moodboardResource._meta.ui! },
+        mimeType: moodboardResource.mimeType,
       },
       async () => {
         const templateHTML = await loadHtml(this.env.ASSETS, "/moodboard.html");
@@ -73,7 +66,7 @@ export class Moodboard3DMCP extends McpAgent<Env, unknown, Props> {
           contents: [
             {
               uri: moodboardResource.uri,
-              mimeType: RESOURCE_MIME_TYPE,
+              mimeType: UI_MIME_TYPE,
               text: templateHTML,
               _meta: moodboardResource._meta as Record<string, unknown>,
             },
@@ -91,8 +84,7 @@ export class Moodboard3DMCP extends McpAgent<Env, unknown, Props> {
     // ========================================================================
     // PART 2: Register generate_mood_scene Tool
     // ========================================================================
-    registerAppTool(
-      this.server,
+    this.server.registerTool(
       "generate_mood_scene",
       {
         title: TOOL_METADATA["generate_mood_scene"].title,
@@ -134,12 +126,12 @@ export class Moodboard3DMCP extends McpAgent<Env, unknown, Props> {
           [RESOURCE_URI_META_KEY]: moodboardResource.uri,
         },
       },
-      async (args: GenerateMoodSceneInput) => {
+      async (args) => {
         if (!this.props?.userId) {
           throw new Error("User ID not found in authentication context");
         }
 
-        const { emotion, complexity = 5, height = 600 } = args;
+        const { emotion, complexity = 5, height = 600 } = args as GenerateMoodSceneInput;
         const startTime = Date.now();
 
         try {
@@ -217,8 +209,9 @@ export class Moodboard3DMCP extends McpAgent<Env, unknown, Props> {
             }),
         },
       },
-      async (args: LearnMoodPrimitivesInput) => {
-        const category: MoodPrimitivesCategory = args.category ?? "all";
+      async (args) => {
+        const typedArgs = args as LearnMoodPrimitivesInput;
+        const category: MoodPrimitivesCategory = typedArgs.category ?? "all";
         const documentation = MOOD_PRIMITIVES_DOCUMENTATION[category];
 
         logger.info({
